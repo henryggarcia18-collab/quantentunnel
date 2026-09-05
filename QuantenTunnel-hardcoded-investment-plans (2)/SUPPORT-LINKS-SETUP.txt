@@ -1,5 +1,0 @@
-Support page update:
-- The supplied WhatsApp icon image is used for the support icon in the top bar and sidebar.
-- The accidental yellow/empty line between Email Support and the community buttons has been removed.
-- Telegram and WhatsApp community actions are now separate dark/outlined buttons.
-- The current destinations remain placeholders (https://t.me/+NDe5jOnhn-U4N2Y0 and https://chat.whatsapp.com/I85EG5zJdIlIo3ll0jrFAl?mode=gi_t) until the real group invite links are supplied.
