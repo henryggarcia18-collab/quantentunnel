@@ -36,16 +36,16 @@ function isWithdrawalWindowOpen() {
   return Number.isFinite(hour) && hour >= 10 && hour < 16;
 }
 
-const INVESTMENT_DAILY_RATE = Number(process.env.INVESTMENT_DAILY_RATE || 0);
-const INVESTMENT_TERM_DAYS = Number(process.env.INVESTMENT_TERM_DAYS || 30);
-
-// Investment plans: Starter, Growth and Premium are configured by default.
-// Advance, Mentor and Supreme remain unavailable until explicitly enabled.
-const PLAN_STARTER_RATE = Number(process.env.PLAN_STARTER_RATE ?? 0.10);
-const PLAN_GROWTH_RATE = Number(process.env.PLAN_GROWTH_RATE ?? 0.05);
+// Investment plans are intentionally hardcoded so plan availability and terms do not
+// depend on Vercel environment variables. Change these constants in the code if a
+// plan is ever changed.
+const INVESTMENT_DAILY_RATE = 0;
+const INVESTMENT_TERM_DAYS = 30;
+const PLAN_STARTER_RATE = 0.10;
+const PLAN_GROWTH_RATE = 0.05;
 const PLAN_PREMIUM_RATE = 0.04;
-const PLAN_STARTER_TERM_DAYS = Number(process.env.PLAN_STARTER_TERM_DAYS ?? 15);
-const PLAN_GROWTH_TERM_DAYS = Number(process.env.PLAN_GROWTH_TERM_DAYS ?? 31);
+const PLAN_STARTER_TERM_DAYS = 15;
+const PLAN_GROWTH_TERM_DAYS = 31;
 const PLAN_PREMIUM_TERM_DAYS = 41;
 const CRON_SECRET = process.env.CRON_SECRET || '';
 const REFERRAL_LEVEL1_RATE = 0.05;
