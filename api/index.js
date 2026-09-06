@@ -36,16 +36,16 @@ function isWithdrawalWindowOpen() {
   return Number.isFinite(hour) && hour >= 10 && hour < 16;
 }
 
-// Investment plans are intentionally hardcoded so plan availability and terms do not
-// depend on Vercel environment variables. Change these constants in the code if a
-// plan is ever changed.
-const INVESTMENT_DAILY_RATE = 0;
-const INVESTMENT_TERM_DAYS = 30;
-const PLAN_STARTER_RATE = 0.10;
-const PLAN_GROWTH_RATE = 0.05;
+const INVESTMENT_DAILY_RATE = Number(process.env.INVESTMENT_DAILY_RATE || 0);
+const INVESTMENT_TERM_DAYS = Number(process.env.INVESTMENT_TERM_DAYS || 30);
+
+// Investment plans: Starter, Growth and Premium are configured by default.
+// Advance, Mentor and Supreme remain unavailable until explicitly enabled.
+const PLAN_STARTER_RATE = Number(process.env.PLAN_STARTER_RATE ?? 0.10);
+const PLAN_GROWTH_RATE = Number(process.env.PLAN_GROWTH_RATE ?? 0.05);
 const PLAN_PREMIUM_RATE = 0.04;
-const PLAN_STARTER_TERM_DAYS = 15;
-const PLAN_GROWTH_TERM_DAYS = 31;
+const PLAN_STARTER_TERM_DAYS = Number(process.env.PLAN_STARTER_TERM_DAYS ?? 15);
+const PLAN_GROWTH_TERM_DAYS = Number(process.env.PLAN_GROWTH_TERM_DAYS ?? 31);
 const PLAN_PREMIUM_TERM_DAYS = 41;
 const CRON_SECRET = process.env.CRON_SECRET || '';
 const REFERRAL_LEVEL1_RATE = 0.05;
@@ -528,10 +528,32 @@ app.post('/investments', auth, async (req,res) => {
     const rate=planRates[String(plan)]; const minimum=planMinimums[String(plan)]; const termDays=planTerms[String(plan)]; const n=Number(amount);
     if(rate===undefined || minimum===undefined || termDays===undefined || rate<=0 || n!==minimum) return res.status(400).json({error:'This plan can only be purchased for its fixed amount'});
     if(!plan||!Number.isFinite(n)||n<=0||!Number.isFinite(rate)||rate<0) return res.status(400).json({error:'Invalid investment details'});
-    const existing=await client.query(`SELECT id,created_at,term_days,status FROM investments WHERE user_id=$1 AND plan=$2 AND status='active' ORDER BY id DESC FOR UPDATE`,[req.auth.id,String(plan)]);
-    if(existing.rowCount){const current=existing.rows[0];const endsAt=new Date(current.created_at).getTime()+Number(current.term_days||termDays)*86400000;if(Date.now()<endsAt){await client.query('ROLLBACK');return res.status(400).json({error:`Your ${plan} plan is already running. You can purchase it again after the term is complete.`});}await client.query(`UPDATE investments SET status='completed' WHERE id=$1`,[current.id]);}
+    // Start the transaction BEFORE checking for an existing active plan.
+    // The user's row is locked first so two rapid/simultaneous purchase
+    // requests cannot both pass the active-plan check and charge the wallet.
     await client.query('BEGIN');
-    const ur=await client.query('SELECT * FROM users WHERE id=$1 FOR UPDATE',[req.auth.id]); const u=ur.rows[0];
+    const ur=await client.query('SELECT * FROM users WHERE id=$1 FOR UPDATE',[req.auth.id]);
+    const u=ur.rows[0];
+    if(!u){await client.query('ROLLBACK');return res.status(404).json({error:'User account not found'});}
+
+    const existing=await client.query(
+      `SELECT id,created_at,term_days,status
+       FROM investments
+       WHERE user_id=$1 AND plan=$2 AND status='active'
+       ORDER BY id DESC
+       FOR UPDATE`,
+      [req.auth.id,String(plan)]
+    );
+    if(existing.rowCount){
+      const current=existing.rows[0];
+      const endsAt=new Date(current.created_at).getTime()+Number(current.term_days||termDays)*86400000;
+      if(Date.now()<endsAt){
+        await client.query('ROLLBACK');
+        return res.status(400).json({error:`Your ${plan} plan is already running. You can purchase it again after the term is complete.`});
+      }
+      await client.query(`UPDATE investments SET status='completed' WHERE id=$1`,[current.id]);
+    }
+
     if(Number(u.wallet)<n){await client.query('ROLLBACK');return res.status(400).json({error:'Insufficient wallet balance'});}
     const ir=await client.query(`INSERT INTO investments(user_id,plan,amount,daily_rate,term_days,last_credited_at,last_claimed_at,last_claim_cycle,claim_count) VALUES($1,$2,$3,$4,$5,NOW(),NULL,0,0) RETURNING *`,[req.auth.id,plan,n,rate,termDays]);
     await client.query('UPDATE users SET wallet=wallet-$1 WHERE id=$2',[n,req.auth.id]);
